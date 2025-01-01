@@ -1,0 +1,6 @@
+settings/
+config/
+downloads/
+data_raw/
+.ipynb_checkpoints/
+cache/
