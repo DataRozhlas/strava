@@ -11,6 +11,8 @@ data_folder = "data/"
 os.makedirs(data_raw, exist_ok=True)
 os.makedirs(data_folder, exist_ok=True)
 pl.Config(tbl_rows=300)
+pl.Config.set_fmt_str_lengths(200)
+pl.Config.set_tbl_width_chars(200)
 
 done = [x.replace(".parquet", "") for x in os.listdir(data_raw)]
 
@@ -74,6 +76,9 @@ df = df.with_columns(
 df = df.with_columns(
     (pl.col("date").cast(pl.Int64) * 1000000).cast(pl.Datetime(time_zone="CET"))
 ).filter(pl.col("date").dt.hour() > 22).select(['id','name','activity_type','distance','average_grade','elevation_high','elevation_low','total_elevation_gain','start_latlng','end_latlng','country','state','city','effort_count','athlete_count','date','start_to_finish_distance'])
+
+replacements = {"Czech Republic": "Czechia", "United Kingdom": "UK"}
+df = df.with_columns(pl.col('country').str.replace_many(replacements))
 
 df.write_parquet(os.path.join(data_folder, "segments.parquet"))
 
