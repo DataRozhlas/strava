@@ -37,6 +37,7 @@ for s in source_folders:
 
 df = pl.read_parquet("data_raw/segments/*.parquet")
 
+
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
     Calculate the great-circle distance between two points on Earth.
@@ -60,6 +61,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
     return R * c
 
+
 df = df.with_columns(
     pl.struct(["start_latlng", "end_latlng"])
     .map_elements(
@@ -68,39 +70,76 @@ df = df.with_columns(
             x["start_latlng"][1],
             x["end_latlng"][0],
             x["end_latlng"][1],
-        )
-    , return_dtype=float)
+        ),
+        return_dtype=float,
+    )
     .alias("start_to_finish_distance")
 )
 
-df = df.with_columns(
-    (pl.col("date").cast(pl.Int64) * 1000000).cast(pl.Datetime(time_zone="CET"))
-).filter(pl.col("date").dt.hour() > 22).select(['id','name','activity_type','distance','average_grade','elevation_high','elevation_low','total_elevation_gain','start_latlng','end_latlng','country','state','city','effort_count','athlete_count','date','start_to_finish_distance'])
+df = (
+    df.with_columns(
+        (pl.col("date").cast(pl.Int64) * 1000000).cast(pl.Datetime(time_zone="CET"))
+    )
+    .filter(pl.col("date").dt.hour() > 22)
+    .select(
+        [
+            "id",
+            "name",
+            "activity_type",
+            "distance",
+            "average_grade",
+            "elevation_high",
+            "elevation_low",
+            "total_elevation_gain",
+            "start_latlng",
+            "end_latlng",
+            "country",
+            "state",
+            "city",
+            "effort_count",
+            "athlete_count",
+            "date",
+            "start_to_finish_distance",
+        ]
+    )
+)
 
-replacements = {"Czech Republic": "Czechia", "United Kingdom": "UK"}
-df = df.with_columns(pl.col('country').str.replace_many(replacements))
+replacements = {
+    "Czech Republic": "Czechia",
+    "United Kingdom": "UK",
+    "Mole Valley District, Surrey, UK": "Mole Valley District",
+}
+df = df.with_columns(pl.col("country").str.replace_many(replacements)).with_columns(
+    pl.col("city").str.replace_many(replacements)
+)
 
 df.write_parquet(os.path.join(data_folder, "segments.parquet"))
 
 ## OVERVIEW DIVISION
 
 overview = (
-    df.group_by(
-        ["name", "activity_type", "country", "city", "distance", "total_elevation_gain"]
+    df.with_columns(pl.col("name").str.slice(0, 25))
+    .with_columns(pl.col("distance").cast(int))
+    .with_columns(pl.col("total_elevation_gain").cast(int).alias("elevation_gain"))
+    .with_columns(pl.col("effort_count").alias("efforts"))
+    .group_by(
+        ["name", "activity_type", "country", "city", "distance", "elevation_gain"]
     )
-    .agg(pl.col("effort_count").max())
-    .sort("effort_count", descending=True)
+    .agg(pl.col("efforts").max())
+    .sort("efforts", descending=True)
 )
 last_date = df.select(pl.col("date")).max().item()
 last_date = last_date.strftime("%Y-%m-%d")
 
 with pl.Config() as cfg:
     cfg.set_tbl_formatting("ASCII_MARKDOWN")
-    overview_markdown = repr(overview)
+    overview_markdown = repr(overview).splitlines()
+    overview_markdown = '\n'.join(overview_markdown[1:3] + overview_markdown[5:])
+
 with open("README.md", "r", encoding="utf8") as readme:
     content = readme.read()
     content = content.split("##")[0]
 with open("README.md", "w+", encoding="utf8") as readme:
     readme.write(
-        f"""{content}## Poslední aktualizace\n\n{last_date}\n\n## Sledované segmenty\n\n" {overview_markdown}"""
+        f"""{content}## Poslední aktualizace\n\n{last_date}\n\n## Sledované segmenty\n\n{overview_markdown}"""
     )
