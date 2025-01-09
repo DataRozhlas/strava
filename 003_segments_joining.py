@@ -118,12 +118,13 @@ df.write_parquet(os.path.join(data_folder, "segments.parquet"))
 ## OVERVIEW DIVISION
 
 overview = (
-    df.with_columns(pl.col("name").str.slice(0, 25))
+    df.with_columns(pl.col("name").str.slice(0, 32))
     .with_columns(pl.col("distance").cast(int))
     .with_columns(pl.col("total_elevation_gain").cast(int).alias("elevation_gain"))
     .with_columns(pl.col("effort_count").alias("efforts"))
+    .with_columns(pl.col("activity_type").alias("type"))
     .group_by(
-        ["name", "activity_type", "country", "city", "distance", "elevation_gain"]
+        ["name", "type", "country", "city", "distance", "elevation_gain"]
     )
     .agg(pl.col("efforts").max())
     .sort("efforts", descending=True)
