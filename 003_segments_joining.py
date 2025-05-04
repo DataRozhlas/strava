@@ -109,9 +109,13 @@ replacements = {
     "United Kingdom": "UK",
     "Mole Valley District, Surrey, UK": "Mole Valley District",
 }
-df = df.with_columns(pl.col("country").str.replace_many(replacements)).with_columns(
+df = df.with_columns(
+    pl.col("country").str.replace_many(replacements)
+    ).with_columns(
     pl.col("city").str.replace_many(replacements)
-)
+    ).with_columns(
+    pl.col("name").str.strip_chars()
+    )
 
 df.write_parquet(os.path.join(data_folder, "segments.parquet"))
 
