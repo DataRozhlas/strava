@@ -39,7 +39,7 @@ if __name__ == "__main__":
     client = StravaClient(access_token=key)
 
     day = date.today().strftime("%Y-%m-%d")
-    destination = f"downloads/segments/{day}"
+    destination = f"/mnt/usbdrive/strava/downloads/segments/{day}"
     os.makedirs(destination, exist_ok=True)
 
     with open(os.path.join("config","segments.json"), "r", encoding="utf-8") as following:

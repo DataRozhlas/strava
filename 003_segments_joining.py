@@ -5,38 +5,75 @@ import polars as pl
 
 ## FOLDERS & CONFIG DIVISION
 
-source_folders = os.listdir("downloads/segments")
-data_raw = "data_raw/segments"
-data_folder = "data/"
+source_folders = os.listdir("/mnt/usbdrive/strava/downloads/segments")
+data_raw = "/mnt/usbdrive/strava/data_raw/segments"
+data_folder = "/mnt/usbdrive/strava/data/"
 os.makedirs(data_raw, exist_ok=True)
 os.makedirs(data_folder, exist_ok=True)
-pl.Config(tbl_rows=300)
-pl.Config.set_fmt_str_lengths(200)
-pl.Config.set_tbl_width_chars(200)
 
 done = [x.replace(".parquet", "") for x in os.listdir(data_raw)]
 
 ## DAILY PARQUET DIVISION
 
+## DAILY PARQUET DIVISION
+
 for s in source_folders:
-    if s not in done:
-        print(s)
+    source_path = os.path.join("/mnt/usbdrive/strava/downloads/segments", s)
+    parquet_path = os.path.join(data_raw, f"{s}.parquet")
+    
+    # Determine if we need to process this folder
+    should_process = False
+    
+    if not os.path.exists(parquet_path):
+        # Case 1: Parquet file doesn't exist yet
+        should_process = True
+    else:
+        # Case 2: Compare modification times (mtime)
+        # If the source folder was modified AFTER the parquet file was written, update it.
+        src_mtime = os.path.getmtime(source_path)
+        dst_mtime = os.path.getmtime(parquet_path)
+        if src_mtime > dst_mtime:
+            should_process = True
+
+    if should_process:
+        print(f"Processing: {s}")
         day = []
-        for f in os.listdir(f"downloads/segments/{s}"):
-            time = f.split("_")[1].split(".")[0]
-            with open(
-                os.path.join(f"downloads/segments/{s}", f), "r", encoding="utf-8"
-            ) as file:
-                segment = json.loads(file.read())
-                segment["date"] = time
-                day.append(segment)
-        df = pl.DataFrame(day)
-        df.write_parquet(os.path.join(data_raw, f"{s}.parquet"))
+        # Note: Added error handling for empty folders or non-files
+        try:
+            files = os.listdir(source_path)
+        except NotADirectoryError:
+            continue
+
+        for f in files:
+            # Basic validation to ensure we only look at files with underscores (as per your split logic)
+            if "_" not in f: continue
+            
+            try:
+                time = f.split("_")[1].split(".")[0]
+                full_path = os.path.join(source_path, f)
+                
+                with open(full_path, "r", encoding="utf-8") as file:
+                    segment = json.loads(file.read())
+                    segment["date"] = time
+                    day.append(segment)
+            except Exception as e:
+                print(f"Error reading {f}: {e}")
+                continue
+        
+        if day:
+            df = pl.DataFrame(day)
+            df.write_parquet(parquet_path)
+        else:
+            print(f"No valid data found in {s}")
+    else:
+        # Optional: Print skipped folders to know the logic is working
+        # print(f"Skipping {s} (Up to date)")
+        pass
 
 ## FINAL JOIN DIVISION // HAIL CLAUDE
 
-df = pl.read_parquet("data_raw/segments/*.parquet")
-
+df = pl.read_parquet("/mnt/usbdrive/strava/data_raw/segments/*.parquet")
+print(f"{len(df)} rows loaded.")
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
@@ -135,6 +172,8 @@ overview = (
 )
 last_date = df.select(pl.col("date")).max().item()
 last_date = last_date.strftime("%Y-%m-%d")
+
+print(df.sort(by="date").group_by_dynamic(index_column="date",every='1d').agg(pl.col("name").unique().len()).sort(by="date").tail(10))
 
 with pl.Config() as cfg:
     cfg.set_tbl_formatting("ASCII_MARKDOWN")
